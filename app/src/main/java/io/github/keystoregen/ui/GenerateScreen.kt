@@ -33,6 +33,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -48,10 +49,11 @@ import io.github.keystoregen.KeyType
 import io.github.keystoregen.MainViewModel
 import io.github.keystoregen.Snippets
 import io.github.keystoregen.secrets
+import io.github.keystoregen.github.GitHubViewModel
 import java.text.DateFormat
 
 @Composable
-fun GenerateScreen(vm: MainViewModel, actions: Actions, onGenerate: () -> Unit, modifier: Modifier = Modifier) {
+fun GenerateScreen(vm: MainViewModel, gh: GitHubViewModel, actions: Actions, onGenerate: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier
             .fillMaxSize()
@@ -60,7 +62,7 @@ fun GenerateScreen(vm: MainViewModel, actions: Actions, onGenerate: () -> Unit, 
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Body("Creates an Android app signing key, the same as keytool -genkeypair, and gets it into your CI secrets and password manager. Nothing leaves the phone unless you save or copy it.")
+        Body("Creates an Android app signing key, the same as keytool -genkeypair, and gets it into your CI secrets and password manager. Nothing leaves the phone unless you save, copy or upload it.")
 
         KeyCard(vm)
         PasswordCard(vm)
@@ -85,7 +87,7 @@ fun GenerateScreen(vm: MainViewModel, actions: Actions, onGenerate: () -> Unit, 
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     ResultCard(vm, actions)
                     BitwardenCard(vm, actions)
-                    SecretsCard(vm, actions)
+                    SecretsCard(vm, gh, actions)
                     LocalBuildCard(vm, actions)
                 }
             }
@@ -214,16 +216,21 @@ private fun BitwardenCard(vm: MainViewModel, actions: Actions) {
 }
 
 @Composable
-private fun SecretsCard(vm: MainViewModel, actions: Actions) {
+private fun SecretsCard(vm: MainViewModel, gh: GitHubViewModel, actions: Actions) {
     val keystore = vm.keystore ?: return
-    SectionCard("Add the CI secrets", badge = "2", subtitle = "GitHub → Settings → Secrets and variables → Actions") {
-        Body("Create one repository secret per row (“New repository secret”). Copy each value here or from the Bitwarden item.")
-        Field(
-            vm.repository, { vm.repository = it }, "Repository (optional)",
-            supporting = "owner/name or a GitHub URL, to open its secrets page",
-        )
+    SectionCard("Add the CI secrets", badge = "2", subtitle = "GitHub Actions repository secrets") {
+        GitHubUpload(vm, gh, keystore, actions)
+        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+        Text("Or add them by hand", style = MaterialTheme.typography.titleSmall)
+        Body("Settings → Secrets and variables → Actions → “New repository secret”, one per row. Copy each value here or from the Bitwarden item.")
+        if (gh.token == null) {
+            Field(
+                vm.repository, { vm.repository = it }, "Repository (optional)",
+                supporting = "owner/name or a GitHub URL, to open its secrets page",
+            )
+        }
         vm.repositoryPath?.let { path ->
-            FilledTonalButton(
+            OutlinedButton(
                 onClick = { actions.openUrl("https://github.com/$path/settings/secrets/actions/new") },
                 modifier = Modifier.fillMaxWidth(),
             ) {

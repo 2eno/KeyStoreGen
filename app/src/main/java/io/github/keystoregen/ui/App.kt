@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.keystoregen.MainViewModel
+import io.github.keystoregen.github.GitHubViewModel
 import kotlinx.coroutines.launch
 
 /** What the screens need from the outside world: clipboard, files, messages. */
@@ -51,7 +52,7 @@ class Actions(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App(vm: MainViewModel = viewModel()) {
+fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -134,6 +135,7 @@ fun App(vm: MainViewModel = viewModel()) {
         when (tab) {
             0 -> GenerateScreen(
                 vm = vm,
+                gh = gh,
                 actions = actions,
                 onGenerate = {
                     if (vm.keystore != null) confirmReplace = true else vm.generate { error = it }

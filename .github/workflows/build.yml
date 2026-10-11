@@ -57,6 +57,8 @@ jobs:
 
       - name: Test and build
         env:
+          # Public client ID of the GitHub OAuth app for "Sign in with GitHub" (a variable, not a secret).
+          GH_OAUTH_CLIENT_ID: ${{ vars.GH_OAUTH_CLIENT_ID }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}

@@ -9,8 +9,10 @@ you save or copy it.
 - Generated 32-character password, or your own
 - Optional certificate details (CN, O, OU, L, ST, C)
 - SHA-256 and SHA-1 fingerprints (for Firebase, Google Sign-In, Play)
-- One-tap copy of the four CI secrets; clips are marked sensitive
-- Opens the "New repository secret" page of your GitHub repository
+- **Sign in with GitHub, pick a repository, and add all four secrets in one tap.**
+  Values are encrypted on the phone with the repository's public key (libsodium sealed
+  box, as GitHub requires); existing secrets are only replaced after you confirm
+- Or copy the secrets one by one; clips are marked sensitive
 - Password-protected Bitwarden export (one secure note with everything)
 - Saves the `.jks` and a matching `signing.properties`
 - Secret name prefix, for repositories that sign several apps
@@ -73,6 +75,31 @@ app, such as patch bundles or plugins, isn't checked for a signature.
 so the first signed release can't install over a debug-signed build. Uninstalling also
 resets the app's data. Add the secrets before anyone relies on your builds, then re-run
 the latest release so it's signed with your key, and users only have to uninstall once.
+
+## Sign in with GitHub
+
+The app signs in with GitHub's [device flow](https://docs.github.com/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow):
+it shows a code, you enter it at github.com/login/device, done. No password ever
+reaches the app. This needs a GitHub OAuth app, once:
+
+1. github.com → Settings → Developer settings → OAuth Apps → **New OAuth App**.
+   Any name and homepage; the callback URL isn't used (e.g. `https://github.com`).
+2. In the new app, tick **Enable Device Flow** and save. You don't need a client secret.
+3. Put its **Client ID** into the build. It is public by design:
+   - locally: `githubClientId=Ov23…` in `gradle.properties`, or
+   - in CI: a repository **variable** (not secret) `GH_OAUTH_CLIENT_ID`
+     (Settings → Secrets and variables → Actions → Variables).
+
+The app asks for the `repo` scope, the only classic scope that can write Actions
+secrets. Without a client ID in the build, or if you prefer narrower access, sign in
+with a **fine-grained personal access token** instead, limited to the repositories you
+need, with the permission *Secrets: Read and write*.
+
+The token is stored encrypted with a key in the Android Keystore and never leaves the
+phone except to talk to api.github.com. Sign out in the app removes it; to revoke it,
+go to github.com → Settings → Applications.
+
+Writing secrets requires admin access to the repository (or the token permission above).
 
 ## Building
 

@@ -54,7 +54,7 @@ fun GuideScreen(vm: MainViewModel, actions: Actions, modifier: Modifier = Modifi
         }
 
         SectionCard("Add four repository secrets", badge = "3") {
-            Body("github.com/OWNER/REPO → Settings → Secrets and variables → Actions → New repository secret:")
+            Body("Quickest: after generating, sign in with GitHub on the Generate tab, pick the repository and add all four in one tap. By hand: github.com/OWNER/REPO → Settings → Secrets and variables → Actions → New repository secret:")
             SecretTable(
                 listOf(
                     names.keystore to "the base64 keystore (keystore.txt)",

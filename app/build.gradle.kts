@@ -30,6 +30,12 @@ android {
         targetSdk = 36
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = (findProperty("versionName") as String?) ?: "1.0.0"
+
+        // Client ID of a GitHub OAuth app with device flow enabled (see README). It is
+        // public by design; without it, sign-in falls back to pasting a token.
+        val githubClientId = (findProperty("githubClientId") as String?)?.takeIf { it.isNotBlank() }
+            ?: System.getenv("GH_OAUTH_CLIENT_ID") ?: ""
+        buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
     }
 
     signingConfigs {
@@ -79,6 +85,9 @@ dependencies {
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // X25519, XSalsa20-Poly1305 and BLAKE2b for GitHub's sealed-box secret encryption.
+    implementation(libs.bouncycastle)
 
     testImplementation(libs.junit)
 }
