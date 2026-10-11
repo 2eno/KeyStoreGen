@@ -1,0 +1,102 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Only used to decide what to do; the values reach Gradle in the build step.
+      HAS_KEY: ${{ secrets.KEYSTORE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            name="${GITHUB_REF_NAME#v}"
+          else
+            name="0.0.0-nightly.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          # A stable release is a tag without a -suffix, e.g. v1.2.0 but not v1.2.0-beta.
+          if [[ "$GITHUB_REF" == refs/tags/v* && "$name" != *-* ]]; then
+            echo "stable=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Refuse an unsigned stable release
+        if: steps.version.outputs.stable == 'true' && env.HAS_KEY != 'true'
+        run: |
+          echo "::error::Stable releases must be signed. Add the KEYSTORE, KEYSTORE_PASSWORD, KEYSTORE_ALIAS and KEYSTORE_ALIAS_PASSWORD secrets (see README)."
+          exit 1
+
+      - name: Decode keystore
+        if: env.HAS_KEY == 'true' && github.event_name != 'pull_request'
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Test and build
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+        run: >
+          ./gradlew testDebugUnitTest assembleRelease
+          -PversionName=${{ steps.version.outputs.name }}
+          -PversionCode=${{ steps.version.outputs.code }}
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk "KeyStoreGen-${{ steps.version.outputs.name }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KeyStoreGen-${{ steps.version.outputs.name }}
+          path: KeyStoreGen-*.apk
+
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "$HAS_KEY" != "true" ]; then
+            echo "⚠️ Signed with a throwaway debug key: later releases signed with the real key can't install over this one without uninstalling it first." > notes.md
+          else
+            echo "Signed release." > notes.md
+          fi
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: KeyStoreGen-*.apk
+          body_path: notes.md
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.stable != 'true' }}
+
+      # Nightly builds are only published once they're signed with the real key.
+      - name: Publish nightly build
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && env.HAS_KEY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag || true
+          gh release create nightly KeyStoreGen-*.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Nightly Build" --notes "Latest build of main ($GITHUB_SHA)."
