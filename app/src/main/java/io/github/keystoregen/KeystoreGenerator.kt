@@ -38,16 +38,38 @@ data class Subject(
         ).filter { it.second.isNotBlank() }.joinToString(", ") { "${it.first}=${it.second}" }
 }
 
-class GeneratedKeystore(
+/** Where a keystore came from; imported ones keep their original file and format. */
+enum class KeystoreFormat(val label: String) { PKCS12("PKCS#12"), JKS("JKS") }
+
+/** A keystore with one key entry, generated here or imported, plus everything CI needs. */
+class SigningKeystore(
+    /** The keystore file exactly as saved and uploaded. */
     val bytes: ByteArray,
     val alias: String,
+    /** The keystore password. */
     val password: String,
-    val keyType: KeyType,
+    /** The key password; for PKCS#12 keystores always the keystore password. */
+    val keyPassword: String,
     val certificate: X509Certificate,
+    val format: KeystoreFormat = KeystoreFormat.PKCS12,
+    val imported: Boolean = false,
 ) {
     val base64: String get() = java.util.Base64.getEncoder().encodeToString(bytes)
     val sha256: String get() = fingerprint("SHA-256")
     val sha1: String get() = fingerprint("SHA-1")
+
+    /** "RSA 4096", "EC P-256" and so on, read from the certificate. */
+    val algorithm: String
+        get() = when (val key = certificate.publicKey) {
+            is java.security.interfaces.RSAPublicKey -> "RSA ${key.modulus.bitLength()}"
+            is java.security.interfaces.ECPublicKey -> when (key.params.curve.field.fieldSize) {
+                256 -> "EC P-256"
+                384 -> "EC P-384"
+                521 -> "EC P-521"
+                else -> "EC ${key.params.curve.field.fieldSize}"
+            }
+            else -> key.algorithm
+        }
 
     private fun fingerprint(algorithm: String): String =
         MessageDigest.getInstance(algorithm).digest(certificate.encoded)
@@ -73,7 +95,7 @@ object KeystoreGenerator {
         subject: Subject,
         validityYears: Int,
         keyType: KeyType = KeyType.RSA_4096,
-    ): GeneratedKeystore {
+    ): SigningKeystore {
         require(alias.isNotBlank()) { "The alias is empty" }
         require(password.length >= 6) { "The password needs at least 6 characters" }
         require(subject.commonName.isNotBlank()) { "The certificate name is empty" }
@@ -122,7 +144,7 @@ object KeystoreGenerator {
             setKeyEntry(alias, keyPair.private, chars, arrayOf(certificate))
         }
         val bytes = ByteArrayOutputStream().also { keyStore.store(it, chars) }.toByteArray()
-        return GeneratedKeystore(bytes, alias, password, keyType, certificate)
+        return SigningKeystore(bytes, alias, password, password, certificate)
     }
 
     private fun Subject.toAttributes(): List<Pair<String, ByteArray>> = buildList {

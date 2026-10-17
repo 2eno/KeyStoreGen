@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KeystoreGeneratorTest {
-    private fun load(generated: GeneratedKeystore): KeyStore =
+    private fun load(generated: SigningKeystore): KeyStore =
         KeyStore.getInstance("PKCS12").apply {
             load(ByteArrayInputStream(generated.bytes), generated.password.toCharArray())
         }

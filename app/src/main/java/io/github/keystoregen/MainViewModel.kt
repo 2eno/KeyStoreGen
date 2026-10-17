@@ -14,6 +14,9 @@ import kotlinx.coroutines.withContext
  * rotation, but is gone once the app process ends, unless the user saved it.
  */
 class MainViewModel : ViewModel() {
+    /** Generate a new key, or bring in an existing one. */
+    var importing by mutableStateOf(false)
+
     // Key
     var alias by mutableStateOf("release")
     var validityYears by mutableStateOf("100")
@@ -39,7 +42,7 @@ class MainViewModel : ViewModel() {
     var filePassword by mutableStateOf("")
     var filePasswordConfirm by mutableStateOf("")
 
-    var keystore by mutableStateOf<GeneratedKeystore?>(null)
+    var keystore by mutableStateOf<SigningKeystore?>(null)
         private set
     var generating by mutableStateOf(false)
         private set
@@ -100,7 +103,16 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun bitwardenItemName(keystore: GeneratedKeystore): String {
+    /** Takes over an imported keystore, and the secret prefix it was stored under, if any. */
+    fun useKeystore(imported: SigningKeystore, prefix: String?) {
+        keystore = imported
+        alias = imported.alias
+        if (prefix != null && SecretNames.isValidPrefix(prefix)) secretPrefix = prefix
+        filePassword = ""
+        filePasswordConfirm = ""
+    }
+
+    fun bitwardenItemName(keystore: SigningKeystore): String {
         val app = repositoryPath?.substringAfter('/') ?: commonName.trim().ifEmpty { null }
         return if (app != null) "$app signing key (${keystore.alias})" else "Signing key (${keystore.alias})"
     }

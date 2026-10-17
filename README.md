@@ -6,6 +6,10 @@ password manager and, optionally, your computer. Nothing leaves the phone unless
 you save or copy it.
 
 - RSA 4096 (default), RSA 3072, RSA 2048 or EC P-256, in a PKCS#12 keystore
+- **Or import an existing keystore**: a `.jks`/`.keystore`/`.p12` file (PKCS#12 or the
+  older JKS format, also with a separate key password), a Bitwarden JSON export
+  (plain or password protected, PBKDF2 or Argon2id), or pasted base64. The file is kept
+  byte for byte, so CI signs with exactly the keystore you already have
 - Generated 32-character password, or your own
 - Optional certificate details (CN, O, OU, L, ST, C)
 - SHA-256 and SHA-1 fingerprints (for Firebase, Google Sign-In, Play)
@@ -25,7 +29,8 @@ Only the app APK (or app bundle) needs a key. Anything that is never installed a
 app, such as patch bundles or plugins, isn't checked for a signature.
 
 1. **Create a keystore once and back it up.** If you lose it you can never publish an
-   update that installs over the old app. Use this app, or keytool on your computer:
+   update that installs over the old app. Use this app (or import the one you already
+   have, then continue with step 3), or keytool on your computer:
 
    ```sh
    keytool -genkeypair -v -keystore keystoregen.jks -alias keystoregen \

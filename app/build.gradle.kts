@@ -90,4 +90,6 @@ dependencies {
     implementation(libs.bouncycastle)
 
     testImplementation(libs.junit)
+    // The real org.json, since android.jar only has stubs on the JVM.
+    testImplementation(libs.org.json)
 }

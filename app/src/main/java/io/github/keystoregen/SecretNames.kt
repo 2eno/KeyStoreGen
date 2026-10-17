@@ -19,19 +19,22 @@ data class SecretNames(val prefix: String = "") {
 /** A secret the user copies into GitHub, with the value it gets. */
 data class Secret(val name: String, val value: String, val sensitive: Boolean, val hint: String)
 
-fun GeneratedKeystore.secrets(names: SecretNames) = listOf(
+fun SigningKeystore.secrets(names: SecretNames) = listOf(
     Secret(names.keystore, base64, true, "The keystore file, base64-encoded"),
     Secret(names.password, password, true, "Keystore password"),
     Secret(names.alias, alias, false, "Key alias"),
-    Secret(names.aliasPassword, password, true, "Key password (same as the keystore's)"),
+    Secret(
+        names.aliasPassword, keyPassword, true,
+        if (keyPassword == password) "Key password (same as the keystore's)" else "Key password",
+    ),
 )
 
 object Snippets {
     /** signing.properties for local builds; the path is relative to the app/ module. */
-    fun signingProperties(keystore: GeneratedKeystore, names: SecretNames) = """
+    fun signingProperties(keystore: SigningKeystore, names: SecretNames) = """
         |${names.password}=${keystore.password}
         |${names.alias}=${keystore.alias}
-        |${names.aliasPassword}=${keystore.password}
+        |${names.aliasPassword}=${keystore.keyPassword}
         |KEYSTORE_FILE=../${keystore.alias}.jks
         |""".trimMargin()
 

@@ -48,7 +48,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.keystoregen.GeneratedKeystore
+import io.github.keystoregen.SigningKeystore
 import io.github.keystoregen.MainViewModel
 import io.github.keystoregen.github.GitHubViewModel
 import io.github.keystoregen.github.Upload
@@ -56,7 +56,7 @@ import io.github.keystoregen.secrets
 
 /** Sign-in, repository picker and the one-tap upload of all four secrets. */
 @Composable
-fun GitHubUpload(vm: MainViewModel, gh: GitHubViewModel, keystore: GeneratedKeystore, actions: Actions) {
+fun GitHubUpload(vm: MainViewModel, gh: GitHubViewModel, keystore: SigningKeystore, actions: Actions) {
     var showSignIn by rememberSaveable { mutableStateOf(false) }
     var showPicker by rememberSaveable { mutableStateOf(false) }
     val login = gh.login

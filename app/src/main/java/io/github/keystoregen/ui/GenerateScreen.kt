@@ -50,10 +50,21 @@ import io.github.keystoregen.MainViewModel
 import io.github.keystoregen.Snippets
 import io.github.keystoregen.secrets
 import io.github.keystoregen.github.GitHubViewModel
+import io.github.keystoregen.importing.ImportSource
+import io.github.keystoregen.importing.ImportViewModel
 import java.text.DateFormat
 
 @Composable
-fun GenerateScreen(vm: MainViewModel, gh: GitHubViewModel, actions: Actions, onGenerate: () -> Unit, modifier: Modifier = Modifier) {
+fun GenerateScreen(
+    vm: MainViewModel,
+    gh: GitHubViewModel,
+    imp: ImportViewModel,
+    actions: Actions,
+    onGenerate: () -> Unit,
+    onPickImport: (ImportSource) -> Unit,
+    onImport: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier
             .fillMaxSize()
@@ -62,22 +73,36 @@ fun GenerateScreen(vm: MainViewModel, gh: GitHubViewModel, actions: Actions, onG
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Body("Creates an Android app signing key, the same as keytool -genkeypair, and gets it into your CI secrets and password manager. Nothing leaves the phone unless you save, copy or upload it.")
+        Body("Creates an Android app signing key, the same as keytool -genkeypair, or imports one you have, and gets it into your CI secrets and password manager. Nothing leaves the phone unless you save, copy or upload it.")
 
-        KeyCard(vm)
-        PasswordCard(vm)
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            listOf("New key" to false, "Import existing" to true).forEachIndexed { i, (label, importing) ->
+                SegmentedButton(
+                    selected = vm.importing == importing,
+                    onClick = { vm.importing = importing },
+                    shape = SegmentedButtonDefaults.itemShape(i, 2),
+                ) { Text(label) }
+            }
+        }
 
-        Button(
-            onClick = onGenerate,
-            enabled = vm.canGenerate,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-        ) {
-            if (vm.generating) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                Spacer(Modifier.size(12.dp))
-                Text("Generating… (can take a few seconds)")
-            } else {
-                Text(if (vm.keystore == null) "Generate keystore" else "Generate a new keystore")
+        if (vm.importing) {
+            ImportCard(imp, onPickFile = onPickImport, onFinish = onImport)
+        } else {
+            KeyCard(vm)
+            PasswordCard(vm)
+
+            Button(
+                onClick = onGenerate,
+                enabled = vm.canGenerate,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+            ) {
+                if (vm.generating) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    Spacer(Modifier.size(12.dp))
+                    Text("Generating… (can take a few seconds)")
+                } else {
+                    Text(if (vm.keystore == null) "Generate keystore" else "Generate a new keystore")
+                }
             }
         }
 
@@ -169,17 +194,34 @@ private fun PasswordCard(vm: MainViewModel) {
 private fun ResultCard(vm: MainViewModel, actions: Actions) {
     val keystore = vm.keystore ?: return
     val until = DateFormat.getDateInstance(DateFormat.LONG).format(keystore.certificate.notAfter)
+    val samePassword = keystore.keyPassword == keystore.password
     SectionCard(
-        "Your key",
+        if (keystore.imported) "Imported key" else "Your key",
         icon = Icons.Outlined.CheckCircle,
-        subtitle = "${keystore.keyType.label} · valid until $until",
+        subtitle = "${keystore.algorithm} · ${keystore.format.label} · valid until $until",
     ) {
-        Note(
-            "The key exists only in this app until you save it, and is gone when the app closes. Back it up first: without it you can never publish an update that installs over your app.",
-            Icons.Outlined.WarningAmber, warning = true,
-        )
+        if (keystore.imported) {
+            Note(
+                "The app holds the imported keystore in memory only, unchanged, and forgets it when it closes.",
+                Icons.Outlined.Info,
+            )
+        } else {
+            Note(
+                "The key exists only in this app until you save it, and is gone when the app closes. Back it up first: without it you can never publish an update that installs over your app.",
+                Icons.Outlined.WarningAmber, warning = true,
+            )
+        }
+        if (keystore.certificate.notAfter.before(java.util.Date())) {
+            Note("This certificate has expired. Android still installs apps signed with it, but Google Play won't accept new apps with it.", Icons.Outlined.WarningAmber, warning = true)
+        }
         ValueRow("Alias", keystore.alias, { actions.copy("Alias", keystore.alias, false) })
-        ValueRow("Password", keystore.password, { actions.copy("Password", keystore.password, true) }, sensitive = true, hint = "Keystore and key")
+        ValueRow(
+            "Password", keystore.password, { actions.copy("Password", keystore.password, true) },
+            sensitive = true, hint = if (samePassword) "Keystore and key" else "Keystore",
+        )
+        if (!samePassword) {
+            ValueRow("Key password", keystore.keyPassword, { actions.copy("Key password", keystore.keyPassword, true) }, sensitive = true)
+        }
         ValueRow("SHA-256", keystore.sha256, { actions.copy("SHA-256 fingerprint", keystore.sha256, false) })
         ValueRow("SHA-1", keystore.sha1, { actions.copy("SHA-1 fingerprint", keystore.sha1, false) }, hint = "For Firebase and Google Sign-In")
         Body("Subject: ${keystore.certificate.subjectX500Principal.name}")
@@ -267,7 +309,7 @@ private fun LocalBuildCard(vm: MainViewModel, actions: Actions) {
     val keystore = vm.keystore ?: return
     SectionCard("Signed builds on your computer", badge = "3", subtitle = "Optional") {
         Body("Put ${keystore.alias}.jks in the repository root and signing.properties next to it. Keep both out of git. KEYSTORE_FILE is relative to the app/ folder, hence the ../.")
-        CodeBlock(Snippets.signingProperties(keystore, vm.secretNames).replace(keystore.password, "••••••••"))
+        CodeBlock(Snippets.signingProperties(keystore, vm.secretNames).replace(keystore.password, "••••••••").replace(keystore.keyPassword, "••••••••"))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = actions.saveKeystore, modifier = Modifier.weight(1f).widthIn(min = 0.dp)) {
                 Icon(Icons.Outlined.Computer, null, Modifier.size(18.dp))

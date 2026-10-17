@@ -41,7 +41,7 @@ fun GuideScreen(vm: MainViewModel, actions: Actions, modifier: Modifier = Modifi
         )
 
         SectionCard("Create a keystore once", badge = "1") {
-            Body("Use the Generate tab, or keytool on your computer. Back the keystore up: if you lose it you can never publish an update that installs over the old app.")
+            Body("Use the Generate tab (“Import existing” brings in a key you already have), or keytool on your computer. Back the keystore up: if you lose it you can never publish an update that installs over the old app.")
             CodeBlock(Snippets.keytool(alias, vm.years ?: 100, vm.keyType)) {
                 actions.copy("keytool command", Snippets.keytool(alias, vm.years ?: 100, vm.keyType), false)
             }

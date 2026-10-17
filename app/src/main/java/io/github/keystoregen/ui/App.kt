@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.PersistableBundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,6 +40,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.keystoregen.MainViewModel
 import io.github.keystoregen.github.GitHubViewModel
+import io.github.keystoregen.importing.ImportViewModel
 import kotlinx.coroutines.launch
 
 /** What the screens need from the outside world: clipboard, files, messages. */
@@ -52,13 +54,14 @@ class Actions(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel()) {
+fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel(), imp: ImportViewModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<Throwable?>(null) }
-    var confirmReplace by remember { mutableStateOf(false) }
+    /** Runs once the user agrees to drop the current key. */
+    var pendingReplace by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     fun message(text: String) {
         scope.launch {
@@ -87,6 +90,21 @@ fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel()) {
                 result.onSuccess { write(uri, it, "Bitwarden export saved") }.onFailure { error = it }
             }
         }
+    }
+
+    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "file"
+            val bytes = context.contentResolver.openInputStream(uri)!!.use { input ->
+                // No keystore or vault export comes near this; anything bigger is the wrong file.
+                input.readNBytesCompat(MAX_IMPORT_BYTES + 1)
+            }
+            require(bytes.size <= MAX_IMPORT_BYTES) { "That file is too big for a keystore or Bitwarden export" }
+            name to bytes
+        }.onSuccess { (name, bytes) -> imp.fileLoaded(name, bytes) }
+            .onFailure { imp.fileFailed(it.message ?: it.toString()) }
     }
 
     val actions = Actions(
@@ -137,8 +155,23 @@ fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel()) {
                 vm = vm,
                 gh = gh,
                 actions = actions,
+                imp = imp,
                 onGenerate = {
-                    if (vm.keystore != null) confirmReplace = true else vm.generate { error = it }
+                    val generate = { vm.generate { error = it } }
+                    if (vm.keystore != null) pendingReplace = generate else generate()
+                },
+                onPickImport = {
+                    importPicker.launch(arrayOf("*/*"))
+                },
+                onImport = {
+                    val import = {
+                        imp.finish { keystore, prefix ->
+                            vm.useKeystore(keystore, prefix)
+                            gh.dismissUpload()
+                            message("Imported ${keystore.alias}")
+                        }
+                    }
+                    if (vm.keystore != null) pendingReplace = import else import()
                 },
                 modifier = modifier,
             )
@@ -146,18 +179,18 @@ fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel()) {
         }
     }
 
-    if (confirmReplace) {
+    pendingReplace?.let { replace ->
         AlertDialog(
-            onDismissRequest = { confirmReplace = false },
+            onDismissRequest = { pendingReplace = null },
             title = { Text("Replace the current key?") },
             text = { Text("Unless you saved or backed it up, the current key is lost for good. Apps signed with it can then never be updated.") },
             confirmButton = {
                 TextButton(onClick = {
-                    confirmReplace = false
-                    vm.generate { error = it }
+                    pendingReplace = null
+                    replace()
                 }) { Text("Replace") }
             },
-            dismissButton = { TextButton(onClick = { confirmReplace = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingReplace = null }) { Text("Cancel") } },
         )
     }
 
@@ -169,6 +202,20 @@ fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel()) {
             confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } },
         )
     }
+}
+
+private const val MAX_IMPORT_BYTES = 5 * 1024 * 1024
+
+/** InputStream.readNBytes needs API 33; this reads up to [limit] bytes on any version. */
+private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buffer = ByteArray(8192)
+    while (out.size() < limit) {
+        val n = read(buffer, 0, minOf(buffer.size, limit - out.size()))
+        if (n < 0) break
+        out.write(buffer, 0, n)
+    }
+    return out.toByteArray()
 }
 
 /** Sensitive clips are hidden from the clipboard preview on Android 13+. */

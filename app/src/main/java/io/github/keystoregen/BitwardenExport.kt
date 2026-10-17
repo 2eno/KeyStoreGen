@@ -31,11 +31,11 @@ object BitwardenExport {
 
     class Key(val enc: ByteArray, val mac: ByteArray)
 
-    fun plainJson(keystore: GeneratedKeystore, itemName: String, names: SecretNames): String {
+    fun plainJson(keystore: SigningKeystore, itemName: String, names: SecretNames): String {
         val fields = listOf(
             Triple(names.password, keystore.password, FIELD_HIDDEN),
             Triple(names.alias, keystore.alias, FIELD_TEXT),
-            Triple(names.aliasPassword, keystore.password, FIELD_HIDDEN),
+            Triple(names.aliasPassword, keystore.keyPassword, FIELD_HIDDEN),
             Triple("SHA-256 fingerprint", keystore.sha256, FIELD_TEXT),
             Triple("SHA-1 fingerprint", keystore.sha1, FIELD_TEXT),
             Triple("Valid until", keystore.certificate.notAfter.toInstant().toString(), FIELD_TEXT),
@@ -57,10 +57,25 @@ object BitwardenExport {
             """"data":${str(encrypt(plainJson, key))}}"""
     }
 
-    fun deriveKey(password: String, salt: String, iterations: Int): Key {
-        val master = pbkdf2(password.toByteArray(), salt.toByteArray(), iterations)
-        return Key(hkdfExpand(master, "enc"), hkdfExpand(master, "mac"))
+    fun deriveKey(password: String, salt: String, iterations: Int): Key =
+        stretch(pbkdf2(password.toByteArray(), salt.toByteArray(), iterations))
+
+    /** Argon2id, which Bitwarden accounts can choose instead of PBKDF2. Its salt is SHA-256 of the salt string. */
+    fun deriveKeyArgon2(password: String, salt: String, iterations: Int, memoryMiB: Int, parallelism: Int): Key {
+        val params = org.bouncycastle.crypto.params.Argon2Parameters.Builder(org.bouncycastle.crypto.params.Argon2Parameters.ARGON2_id)
+            .withVersion(org.bouncycastle.crypto.params.Argon2Parameters.ARGON2_VERSION_13)
+            .withSalt(MessageDigest.getInstance("SHA-256").digest(salt.toByteArray()))
+            .withIterations(iterations)
+            .withMemoryAsKB(memoryMiB * 1024)
+            .withParallelism(parallelism)
+            .build()
+        val master = ByteArray(32)
+        org.bouncycastle.crypto.generators.Argon2BytesGenerator().apply { init(params) }
+            .generateBytes(password.toByteArray(), master)
+        return stretch(master)
     }
+
+    private fun stretch(master: ByteArray) = Key(hkdfExpand(master, "enc"), hkdfExpand(master, "mac"))
 
     fun encrypt(plain: String, key: Key): String {
         val iv = ByteArray(16).also(random::nextBytes)

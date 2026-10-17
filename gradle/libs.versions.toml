@@ -7,6 +7,7 @@ coreKtx = "1.17.0"
 lifecycle = "2.9.4"
 junit = "4.13.2"
 bouncycastle = "1.84"
+orgJson = "20240303"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -19,6 +20,7 @@ androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+org-json = { module = "org.json:json", version.ref = "orgJson" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
