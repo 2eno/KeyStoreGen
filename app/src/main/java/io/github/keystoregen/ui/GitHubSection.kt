@@ -16,7 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Lock
@@ -44,12 +44,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.keystoregen.SigningKeystore
 import io.github.keystoregen.MainViewModel
+import io.github.keystoregen.github.DeviceAuth
 import io.github.keystoregen.github.GitHubViewModel
 import io.github.keystoregen.github.Upload
 import io.github.keystoregen.secrets
@@ -63,7 +66,7 @@ fun GitHubUpload(vm: MainViewModel, gh: GitHubViewModel, keystore: SigningKeysto
     val repo = vm.repositoryPath
 
     if (gh.token == null) {
-        Body("Sign in to add all four secrets to a repository in one tap. They are encrypted on the phone with the repository's public key, so only GitHub Actions can read them.")
+        Body("Sign in to add all four secrets to a repository in one tap, confirmed with your fingerprint, face or screen lock. They are encrypted on the phone with the repository's public key, so only GitHub Actions can read them.")
         Button(onClick = { showSignIn = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Outlined.AccountCircle, null, Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
@@ -84,17 +87,55 @@ fun GitHubUpload(vm: MainViewModel, gh: GitHubViewModel, keystore: SigningKeysto
 
         val upload = gh.upload
         val busy = upload is Upload.Checking || upload is Upload.Uploading
+        val context = LocalContext.current
+        var authStatus by remember { mutableStateOf(DeviceAuth.status(context)) }
+        var authError by remember { mutableStateOf<String?>(null) }
+        // The user may set up a screen lock in Settings and come back.
+        LifecycleResumeEffect(Unit) {
+            authStatus = DeviceAuth.status(context)
+            onPauseOrDispose { }
+        }
         Button(
             onClick = {
-                gh.uploadSecrets(repo!!, keystore.secrets(vm.secretNames).map { it.name to it.value })
+                val target = repo!!
+                val secrets = keystore.secrets(vm.secretNames).map { it.name to it.value }
+                authError = null
+                DeviceAuth.authenticate(
+                    context,
+                    title = "Add secrets to $target",
+                    subtitle = "Confirm it's you to upload the signing key",
+                    onSuccess = { gh.uploadSecrets(target, secrets) },
+                    onError = { authError = it },
+                )
             },
-            enabled = repo != null && !busy && vm.prefixError == null,
+            enabled = repo != null && !busy && vm.prefixError == null && authStatus == DeviceAuth.Status.READY,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Icon(Icons.Outlined.CloudUpload, null, Modifier.size(18.dp))
+            Icon(Icons.Outlined.Fingerprint, null, Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
             Text(if (repo != null) "Add 4 secrets to $repo" else "Choose a repository first")
         }
+        when (authStatus) {
+            DeviceAuth.Status.READY -> Text(
+                "You'll confirm with your fingerprint, face or screen lock.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            DeviceAuth.Status.NOT_SET_UP -> {
+                Note(
+                    "Uploading needs a screen lock or biometrics, so only you can send your signing key to GitHub. Set one up, then come back.",
+                    Icons.Outlined.Lock, warning = true,
+                )
+                FilledTonalButton(onClick = { actions.startIntent(DeviceAuth.setupIntent()) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Set up screen lock")
+                }
+            }
+            DeviceAuth.Status.UNAVAILABLE -> Note(
+                "This device can't confirm your identity right now, so uploading is off. Add the secrets by hand below.",
+                Icons.Outlined.ErrorOutline, warning = true,
+            )
+        }
+        authError?.let { Note(it, Icons.Outlined.ErrorOutline, warning = true) }
         UploadStatus(upload, total = 4, onOpen = { actions.openUrl("https://github.com/$it/settings/secrets/actions") })
     }
 

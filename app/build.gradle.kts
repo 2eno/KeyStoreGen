@@ -79,6 +79,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    // BiometricPrompt, to confirm uploads to GitHub; it needs a FragmentActivity.
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)

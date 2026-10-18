@@ -15,7 +15,8 @@ you save or copy it.
 - SHA-256 and SHA-1 fingerprints (for Firebase, Google Sign-In, Play)
 - **Sign in with GitHub, pick a repository, and add all four secrets in one tap.**
   Values are encrypted on the phone with the repository's public key (libsodium sealed
-  box, as GitHub requires); existing secrets are only replaced after you confirm
+  box, as GitHub requires); existing secrets are only replaced after you confirm.
+  Every upload is confirmed with your fingerprint, face or screen lock
 - Or copy the secrets one by one; clips are marked sensitive
 - Password-protected Bitwarden export (one secure note with everything)
 - Saves the `.jks` and a matching `signing.properties`
@@ -105,6 +106,11 @@ phone except to talk to api.github.com. Sign out in the app removes it; to revok
 go to github.com → Settings → Applications.
 
 Writing secrets requires admin access to the repository (or the token permission above).
+
+Each upload first asks for your fingerprint, face or screen lock (Android's
+BiometricPrompt), so someone holding your unlocked phone can't push a signing key to
+your repositories with one tap. Without a screen lock set up, uploading stays off and
+the app links to the settings; copying the secrets by hand still works.
 
 ## Building
 

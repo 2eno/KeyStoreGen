@@ -5,6 +5,8 @@ composeBom = "2025.12.01"
 activityCompose = "1.11.0"
 coreKtx = "1.17.0"
 lifecycle = "2.9.4"
+biometric = "1.1.0"
+fragment = "1.8.9"
 junit = "4.13.2"
 bouncycastle = "1.84"
 orgJson = "20240303"
@@ -13,6 +15,9 @@ orgJson = "20240303"
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+androidx-fragment = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 androidx-compose-material-icons = { module = "androidx.compose.material:material-icons-extended" }

@@ -2,13 +2,14 @@ package io.github.keystoregen
 
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.fragment.app.FragmentActivity
 import io.github.keystoregen.ui.App
 import io.github.keystoregen.ui.theme.KeyStoreGenTheme
 
-class MainActivity : ComponentActivity() {
+/** A FragmentActivity because BiometricPrompt runs in a fragment. */
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)

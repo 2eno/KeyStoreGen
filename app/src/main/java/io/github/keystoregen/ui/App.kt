@@ -50,6 +50,7 @@ class Actions(
     val saveSigningProperties: () -> Unit,
     val saveBitwarden: () -> Unit,
     val openUrl: (String) -> Unit,
+    val startIntent: (android.content.Intent) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,6 +120,11 @@ fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel(), imp:
             runCatching {
                 context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url.toUri()))
             }.onFailure { message("No browser found") }
+        },
+        startIntent = { intent ->
+            runCatching { context.startActivity(intent) }
+                .recoverCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)) }
+                .onFailure { message("Couldn't open Settings") }
         },
     )
 
