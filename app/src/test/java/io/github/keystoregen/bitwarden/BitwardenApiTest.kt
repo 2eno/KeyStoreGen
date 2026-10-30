@@ -67,6 +67,14 @@ class BitwardenApiTest {
     @Before
     fun start() {
         http = FakeHttpServer()
+        // Bitwarden's servers answer this way when the client headers are missing.
+        http.filter = { ex ->
+            if (ex.header("Bitwarden-Client-Version").isNullOrEmpty() || ex.header("Bitwarden-Client-Name").isNullOrEmpty()) {
+                400 to """{"message":"No client version header found","validationErrors":null,"object":"error"}"""
+            } else {
+                null
+            }
+        }
         fun <T> checked(block: () -> T): T = try { block() } catch (e: Throwable) { serverFailure = e; throw e }
         http.route("/identity/accounts/prelogin") { ex ->
             checked { assertEquals(email, JSONObject(ex.body).getString("email")) }

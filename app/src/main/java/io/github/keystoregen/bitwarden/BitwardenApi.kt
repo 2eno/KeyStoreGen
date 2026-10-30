@@ -66,6 +66,14 @@ object BitwardenApi {
     const val MAX_ENCRYPTED_FIELD = 10_000
 
     private const val DEVICE_TYPE_ANDROID = 0
+
+    /**
+     * Bitwarden's servers refuse requests without a client name and version ("No client
+     * version header found") and use the version to decide which features a client
+     * supports. These match the official Android app's headers at a recent version.
+     */
+    const val CLIENT_NAME = "mobile"
+    const val CLIENT_VERSION = "2025.10.0"
     private const val CIPHER_SECURE_NOTE = 2
     private const val FIELD_TEXT = 0
     private const val FIELD_HIDDEN = 1
@@ -262,6 +270,8 @@ object BitwardenApi {
             readTimeout = 30_000
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Device-Type", DEVICE_TYPE_ANDROID.toString())
+            setRequestProperty("Bitwarden-Client-Name", CLIENT_NAME)
+            setRequestProperty("Bitwarden-Client-Version", CLIENT_VERSION)
             headers.forEach(::setRequestProperty)
             if (body != null) {
                 doOutput = true

@@ -19,6 +19,9 @@ class FakeHttpServer {
         routes[prefix] = handler
     }
 
+    /** Checked before every route, like a server middleware; a non-null result is the response. */
+    var filter: (Request) -> Pair<Int, String>? = { null }
+
     fun start() = thread(isDaemon = true) {
         while (!socket.isClosed) {
             val client = runCatching { socket.accept() }.getOrNull() ?: break
@@ -38,7 +41,8 @@ class FakeHttpServer {
                 val body = ByteArray(length).also { var n = 0; while (n < length) n += input.read(it, n, length - n) }
                 val request = Request(method, path, headers, body.decodeToString())
                 val (status, text) = try {
-                    routes.entries.firstOrNull { path.startsWith(it.key) }?.value?.invoke(request) ?: (404 to "{}")
+                    filter(request)
+                        ?: routes.entries.firstOrNull { path.startsWith(it.key) }?.value?.invoke(request) ?: (404 to "{}")
                 } catch (e: Throwable) {
                     500 to "{\"message\":\"${e.message}\"}"
                 }
