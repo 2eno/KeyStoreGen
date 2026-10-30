@@ -8,6 +8,7 @@ import android.provider.OpenableColumns
 import android.os.PersistableBundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -39,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.keystoregen.MainViewModel
+import io.github.keystoregen.bitwarden.BitwardenViewModel
 import io.github.keystoregen.github.GitHubViewModel
 import io.github.keystoregen.importing.ImportViewModel
 import kotlinx.coroutines.launch
@@ -55,7 +57,12 @@ class Actions(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel(), imp: ImportViewModel = viewModel()) {
+fun App(
+    vm: MainViewModel = viewModel(),
+    gh: GitHubViewModel = viewModel(),
+    imp: ImportViewModel = viewModel(),
+    bw: BitwardenViewModel = viewModel(),
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -155,15 +162,20 @@ fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel(), imp:
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        val modifier = Modifier.padding(padding)
+        // Consumed, so imePadding() further down only adds what the keyboard covers beyond the bottom bar.
+        val modifier = Modifier.padding(padding).consumeWindowInsets(padding)
         when (tab) {
             0 -> GenerateScreen(
                 vm = vm,
                 gh = gh,
+                bw = bw,
                 actions = actions,
                 imp = imp,
                 onGenerate = {
-                    val generate = { vm.generate { error = it } }
+                    val generate = {
+                        bw.resetSave()
+                        vm.generate { error = it }
+                    }
                     if (vm.keystore != null) pendingReplace = generate else generate()
                 },
                 onPickImport = {
@@ -173,6 +185,7 @@ fun App(vm: MainViewModel = viewModel(), gh: GitHubViewModel = viewModel(), imp:
                     val import = {
                         imp.finish { keystore, prefix ->
                             vm.useKeystore(keystore, prefix)
+                            bw.resetSave()
                             gh.dismissUpload()
                             message("Imported ${keystore.alias}")
                         }

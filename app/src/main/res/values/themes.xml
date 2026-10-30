@@ -1,7 +1,9 @@
 <resources>
-    <style name="Theme.KeyStoreGen" parent="android:Theme.Material.NoActionBar">
+    <!-- Light/dark like the Compose UI, so no dark window shows through while scrolling
+         or while the keyboard animates. -->
+    <style name="Theme.KeyStoreGen" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowBackground">@color/ic_launcher_background</item>
+        <item name="android:windowBackground">@color/window_background</item>
     </style>
 </resources>

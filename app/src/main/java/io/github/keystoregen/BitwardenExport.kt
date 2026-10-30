@@ -58,24 +58,48 @@ object BitwardenExport {
     }
 
     fun deriveKey(password: String, salt: String, iterations: Int): Key =
-        stretch(pbkdf2(password.toByteArray(), salt.toByteArray(), iterations))
+        stretch(Kdf(Kdf.PBKDF2, iterations).masterKey(password, salt))
 
-    /** Argon2id, which Bitwarden accounts can choose instead of PBKDF2. Its salt is SHA-256 of the salt string. */
-    fun deriveKeyArgon2(password: String, salt: String, iterations: Int, memoryMiB: Int, parallelism: Int): Key {
-        val params = org.bouncycastle.crypto.params.Argon2Parameters.Builder(org.bouncycastle.crypto.params.Argon2Parameters.ARGON2_id)
-            .withVersion(org.bouncycastle.crypto.params.Argon2Parameters.ARGON2_VERSION_13)
-            .withSalt(MessageDigest.getInstance("SHA-256").digest(salt.toByteArray()))
-            .withIterations(iterations)
-            .withMemoryAsKB(memoryMiB * 1024)
-            .withParallelism(parallelism)
-            .build()
-        val master = ByteArray(32)
-        org.bouncycastle.crypto.generators.Argon2BytesGenerator().apply { init(params) }
-            .generateBytes(password.toByteArray(), master)
-        return stretch(master)
+    /** Argon2id, which Bitwarden accounts can choose instead of PBKDF2. */
+    fun deriveKeyArgon2(password: String, salt: String, iterations: Int, memoryMiB: Int, parallelism: Int): Key =
+        stretch(Kdf(Kdf.ARGON2ID, iterations, memoryMiB, parallelism).masterKey(password, salt))
+
+    /** Bitwarden's KDF settings, the same for accounts and password-protected exports. */
+    data class Kdf(val type: Int, val iterations: Int, val memoryMiB: Int? = null, val parallelism: Int? = null) {
+        /**
+         * The 32-byte master key. [salt] is the export's salt string, or the account's
+         * email (trimmed, lower case); Argon2id takes its SHA-256.
+         */
+        fun masterKey(password: String, salt: String): ByteArray = when (type) {
+            PBKDF2 -> pbkdf2(password.toByteArray(), salt.toByteArray(), iterations)
+            ARGON2ID -> {
+                val params = org.bouncycastle.crypto.params.Argon2Parameters.Builder(org.bouncycastle.crypto.params.Argon2Parameters.ARGON2_id)
+                    .withVersion(org.bouncycastle.crypto.params.Argon2Parameters.ARGON2_VERSION_13)
+                    .withSalt(MessageDigest.getInstance("SHA-256").digest(salt.toByteArray()))
+                    .withIterations(iterations)
+                    .withMemoryAsKB(requireNotNull(memoryMiB) { "Argon2id needs a memory size" } * 1024)
+                    .withParallelism(requireNotNull(parallelism) { "Argon2id needs a parallelism" })
+                    .build()
+                ByteArray(32).also {
+                    org.bouncycastle.crypto.generators.Argon2BytesGenerator().apply { init(params) }
+                        .generateBytes(password.toByteArray(), it)
+                }
+            }
+            else -> throw IllegalArgumentException("Unknown Bitwarden KDF $type")
+        }
+
+        companion object {
+            const val PBKDF2 = 0
+            const val ARGON2ID = 1
+        }
     }
 
-    private fun stretch(master: ByteArray) = Key(hkdfExpand(master, "enc"), hkdfExpand(master, "mac"))
+    /** HKDF-expands a master key into the AES and HMAC keys that open the vault key. */
+    fun stretch(master: ByteArray) = Key(hkdfExpand(master, "enc"), hkdfExpand(master, "mac"))
+
+    /** What the server checks at login instead of the master password: one PBKDF2 round over the master key. */
+    fun masterPasswordHash(masterKey: ByteArray, password: String): String =
+        b64.encodeToString(pbkdf2(masterKey, password.toByteArray(), 1))
 
     fun encrypt(plain: String, key: Key): String {
         val iv = ByteArray(16).also(random::nextBytes)
@@ -87,13 +111,27 @@ object BitwardenExport {
         return "2." + b64.encodeToString(iv) + "|" + b64.encodeToString(ct) + "|" + b64.encodeToString(mac)
     }
 
-    fun decrypt(encString: String, key: Key): String {
-        require(encString.startsWith("2.")) { "Unsupported EncString type" }
-        val (iv, ct, mac) = encString.removePrefix("2.").split('|').map(Base64.getDecoder()::decode)
-        require(MessageDigest.isEqual(hmac(key.mac, iv + ct), mac)) { "Bad MAC" }
+    fun decrypt(encString: String, key: Key): String = String(decryptBytes(encString, key))
+
+    /**
+     * Opens an EncString: type 2 (AES-CBC with HMAC) with [key], or the type 0 of very old
+     * accounts (AES-CBC without MAC), which only ever held a vault key under the bare master key.
+     */
+    fun decryptBytes(encString: String, key: Key, masterKey: ByteArray? = null): ByteArray {
+        val type = encString.substringBefore('.', "")
+        val parts = encString.substringAfter('.').split('|').map(Base64.getDecoder()::decode)
+        val (iv, ct) = parts
+        val aesKey = when (type) {
+            "2" -> {
+                require(parts.size == 3 && MessageDigest.isEqual(hmac(key.mac, iv + ct), parts[2])) { "Bad MAC" }
+                key.enc
+            }
+            "0" -> requireNotNull(masterKey) { "Unsupported EncString type" }
+            else -> throw IllegalArgumentException("Unsupported EncString type")
+        }
         return Cipher.getInstance("AES/CBC/PKCS5Padding").run {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(key.enc, "AES"), IvParameterSpec(iv))
-            String(doFinal(ct))
+            init(Cipher.DECRYPT_MODE, SecretKeySpec(aesKey, "AES"), IvParameterSpec(iv))
+            doFinal(ct)
         }
     }
 

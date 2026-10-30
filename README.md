@@ -18,7 +18,8 @@ you save or copy it.
   box, as GitHub requires); existing secrets are only replaced after you confirm.
   Every upload is confirmed with your fingerprint, face or screen lock
 - Or copy the secrets one by one; clips are marked sensitive
-- Password-protected Bitwarden export (one secure note with everything)
+- **Save straight to your Bitwarden vault** (bitwarden.com, bitwarden.eu or self-hosted)
+  as one secure note, or as a password-protected Bitwarden export file
 - Saves the `.jks` and a matching `signing.properties`
 - Secret name prefix, for repositories that sign several apps
 - Built-in setup guide with ready-to-copy keytool, workflow and Gradle snippets
@@ -111,6 +112,24 @@ Each upload first asks for your fingerprint, face or screen lock (Android's
 BiometricPrompt), so someone holding your unlocked phone can't push a signing key to
 your repositories with one tap. Without a screen lock set up, uploading stays off and
 the app links to the settings; copying the secrets by hand still works.
+
+## Saving to Bitwarden
+
+Sign in with email and master password (two-step login with an authenticator app or
+email code, and Bitwarden's new-device code, are supported), or with your
+[personal API key](https://bitwarden.com/help/personal-api-key/) plus master password,
+which also works when Bitwarden asks for a captcha or uses another two-step method.
+
+Like the Bitwarden apps, KeyStoreGen derives the master key on the phone, sends the
+server only the master password hash, unlocks the vault key locally and encrypts the
+item before uploading it. The session lives in memory only and ends with the app; the
+app remembers just the server, the email and a device id, so Bitwarden doesn't treat
+every login as a new device. It logs in as an Android client, the way third-party
+Bitwarden clients do.
+
+Bitwarden limits an encrypted note to 10,000 characters, which fits keystores up to
+about 5 KB (an RSA 4096 key from this app is well below that). Bigger ones are refused
+with a hint to save the file instead.
 
 ## Building
 

@@ -49,6 +49,7 @@ import io.github.keystoregen.KeyType
 import io.github.keystoregen.MainViewModel
 import io.github.keystoregen.Snippets
 import io.github.keystoregen.secrets
+import io.github.keystoregen.bitwarden.BitwardenViewModel
 import io.github.keystoregen.github.GitHubViewModel
 import io.github.keystoregen.importing.ImportSource
 import io.github.keystoregen.importing.ImportViewModel
@@ -58,6 +59,7 @@ import java.text.DateFormat
 fun GenerateScreen(
     vm: MainViewModel,
     gh: GitHubViewModel,
+    bw: BitwardenViewModel,
     imp: ImportViewModel,
     actions: Actions,
     onGenerate: () -> Unit,
@@ -111,7 +113,7 @@ fun GenerateScreen(
             if (keystore != null) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     ResultCard(vm, actions)
-                    BitwardenCard(vm, actions)
+                    BitwardenCard(vm, bw, actions)
                     SecretsCard(vm, gh, actions)
                     LocalBuildCard(vm, actions)
                 }
@@ -229,30 +231,34 @@ private fun ResultCard(vm: MainViewModel, actions: Actions) {
 }
 
 @Composable
-private fun BitwardenCard(vm: MainViewModel, actions: Actions) {
+private fun BitwardenCard(vm: MainViewModel, bw: BitwardenViewModel, actions: Actions) {
+    val keystore = vm.keystore ?: return
     SectionCard("Back up", badge = "1", subtitle = "To Bitwarden, as one secure note") {
-        Body("Saves a password-protected Bitwarden export: the note holds the ${vm.secretNames.keystore} value, the fields hold passwords, alias and fingerprints. Import it at vault.bitwarden.com → Tools → Import data, format “Bitwarden (json)”, then delete the file. The file password is only for this import.")
-        Field(
-            vm.filePassword, { vm.filePassword = it }, "File password",
-            error = vm.filePasswordError, secret = true,
-        )
-        Field(
-            vm.filePasswordConfirm, { vm.filePasswordConfirm = it }, "Repeat file password",
-            error = vm.filePasswordConfirmError, secret = true,
-        )
-        FilledTonalButton(onClick = actions.saveBitwarden, enabled = vm.canExport, modifier = Modifier.fillMaxWidth()) {
-            if (vm.exporting) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Outlined.Save, null, Modifier.size(18.dp))
+        BitwardenVault(vm, bw, keystore, actions)
+        Expandable("Or save a file", summary = "A Bitwarden import file, or the keystore itself") {
+            Body("A password-protected Bitwarden export: the note holds the ${vm.secretNames.keystore} value, the fields hold passwords, alias and fingerprints. Import it at vault.bitwarden.com → Tools → Import data, format “Bitwarden (json)”, then delete the file. The file password is only for this import.")
+            Field(
+                vm.filePassword, { vm.filePassword = it }, "File password",
+                error = vm.filePasswordError, secret = true,
+            )
+            Field(
+                vm.filePasswordConfirm, { vm.filePasswordConfirm = it }, "Repeat file password",
+                error = vm.filePasswordConfirmError, secret = true,
+            )
+            FilledTonalButton(onClick = actions.saveBitwarden, enabled = vm.canExport, modifier = Modifier.fillMaxWidth()) {
+                if (vm.exporting) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Outlined.Save, null, Modifier.size(18.dp))
+                }
+                Spacer(Modifier.size(8.dp))
+                Text("Save Bitwarden export…")
             }
-            Spacer(Modifier.size(8.dp))
-            Text("Save Bitwarden export…")
-        }
-        OutlinedButton(onClick = actions.saveKeystore, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Outlined.Save, null, Modifier.size(18.dp))
-            Spacer(Modifier.size(8.dp))
-            Text("Or save the keystore file…")
+            OutlinedButton(onClick = actions.saveKeystore, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Save, null, Modifier.size(18.dp))
+                Spacer(Modifier.size(8.dp))
+                Text("Save the keystore file…")
+            }
         }
     }
 }
