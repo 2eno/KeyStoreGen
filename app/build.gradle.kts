@@ -25,7 +25,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.keystoregen"
+        applicationId = "dev.eno2.keystoregen"
         minSdk = 29
         targetSdk = 36
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
